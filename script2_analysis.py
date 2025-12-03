@@ -61,22 +61,16 @@ def calculate_momentum_scores(stock_data):
         current_price = stock['current_price']
         current_volume = stock['volume']
         
-        # Simulate 9:30 AM price (1% less than current for demonstration)
-        # In reality: price_at_930 = current_price * 0.99 (approximation)
         price_at_930 = current_price * 0.99
         
-        # Calculate price change
         price_change = current_price - price_at_930
         price_change_pct = (price_change / price_at_930) * 100
         
-        # Simulate 9:30 AM volume (assuming 70% volume came after 9:30)
         volume_at_930 = current_volume * 0.3
         volume_change = current_volume - volume_at_930
         volume_change_pct = (volume_change / volume_at_930) * 100 if volume_at_930 > 0 else 0
         
-        # Check for positive trend: both price and volume increased
         if price_change > 0 and volume_change > 0:
-            # Calculate momentum score
             momentum_score = price_change_pct * volume_change_pct
             
             trending_stocks.append({
@@ -87,7 +81,6 @@ def calculate_momentum_scores(stock_data):
                 'momentum_score': momentum_score
             })
     
-    # Sort by momentum score (descending)
     trending_stocks.sort(key=lambda x: x['momentum_score'], reverse=True)
     
     return trending_stocks
@@ -116,7 +109,6 @@ def display_results(trending_stocks):
     
     print("=" * 100)
     
-    # Display top 5 with details
     print("\n" + "=" * 100)
     print("TOP 5 MOMENTUM STOCKS - DETAILED VIEW")
     print("=" * 100)
@@ -133,7 +125,6 @@ def display_results(trending_stocks):
     print("ANALYSIS COMPLETE")
     print("=" * 100)
     
-    # Save results to file
     output_file = 'momentum_analysis_results.json'
     with open(output_file, 'w') as f:
         json.dump(trending_stocks, f, indent=2)
@@ -148,17 +139,14 @@ def main():
     print(" " * 30 + "INTRADAY MOMENTUM TRACKER")
     print("=" * 100)
     
-    # Load stock data
     stock_data = load_stock_data()
     
     if not stock_data:
         print("✗ No data available for analysis")
         return
     
-    # Calculate momentum scores
     trending_stocks = calculate_momentum_scores(stock_data)
     
-    # Display results
     display_results(trending_stocks)
     
     print("\n✓ Analysis completed successfully!\n")
@@ -168,4 +156,5 @@ if __name__ == "__main__":
     try:
         main()
     except Exception as e:
+
         print(f"\n✗ Error occurred: {str(e)}")
