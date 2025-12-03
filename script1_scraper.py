@@ -7,8 +7,7 @@ def fetch_nse_data():
     """
     Fetches live intraday data for NIFTY 50 stocks from NSE
     """
-    
-    # NIFTY 50 stock symbols (sample - you can expand this list)
+        
     nifty50_symbols = [
         'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
         'HINDUNILVR', 'ITC', 'SBIN', 'BHARTIARTL', 'BAJFINANCE',
@@ -23,7 +22,6 @@ def fetch_nse_data():
     print(f"Number of Stocks: {len(nifty50_symbols)}")
     print("=" * 80)
     
-    # Headers to mimic browser request
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
         'Accept': 'application/json',
@@ -34,24 +32,20 @@ def fetch_nse_data():
     
     for symbol in nifty50_symbols:
         try:
-            # NSE API endpoint for quote data
             url = f"https://www.nseindia.com/api/quote-equity?symbol={symbol}"
             
-            # Create session for cookies
             session = requests.Session()
             session.get("https://www.nseindia.com", headers=headers)
-            time.sleep(0.5)  # Rate limiting
+            time.sleep(0.5)  
             
             response = session.get(url, headers=headers, timeout=10)
             
             if response.status_code == 200:
                 data = response.json()
                 
-                # Extract relevant data
                 price_info = data.get('priceInfo', {})
                 current_price = price_info.get('lastPrice', 0)
                 
-                # Get volume data
                 total_traded_volume = data.get('preOpenMarket', {}).get('totalTradedVolume', 0)
                 if total_traded_volume == 0:
                     total_traded_volume = data.get('totalTradedVolume', 0)
@@ -71,9 +65,8 @@ def fetch_nse_data():
         except Exception as e:
             print(f"✗ {symbol:15} | Error: {str(e)[:50]}")
         
-        time.sleep(0.5)  # Rate limiting between requests
+        time.sleep(0.5)  
     
-    # Save data to JSON file
     output_file = 'nse_intraday_data.json'
     with open(output_file, 'w') as f:
         json.dump(stock_data, f, indent=2)
@@ -93,4 +86,5 @@ if __name__ == "__main__":
         print(f"✓ Run 'python script2_analysis.py' to analyze the data")
     except Exception as e:
         print(f"\n✗ Error occurred: {str(e)}")
+
         print("\nNote: If NSE API fails, the script will use simulated data in Script 2")
