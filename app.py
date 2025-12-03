@@ -14,11 +14,9 @@ import random
 app = Flask(__name__)
 CORS(app)
 
-# Store data in memory
 stock_data_cache = []
 momentum_results_cache = []
 
-# NIFTY 50 symbols
 NIFTY50_SYMBOLS = [
     'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
     'HINDUNILVR', 'ITC', 'SBIN', 'BHARTIARTL', 'BAJFINANCE',
@@ -36,7 +34,7 @@ def fetch_nse_stock_data():
             'Accept': 'application/json',
         }
         
-        for symbol in NIFTY50_SYMBOLS[:10]:  # Limit for faster response
+        for symbol in NIFTY50_SYMBOLS[:10]:  
             try:
                 url = f"https://www.nseindia.com/api/quote-equity?symbol={symbol}"
                 session = requests.Session()
@@ -60,7 +58,6 @@ def fetch_nse_stock_data():
             except:
                 continue
         
-        # If API fails or insufficient data, use simulated data
         if len(stock_data) < 5:
             return generate_simulated_data()
         
@@ -93,18 +90,15 @@ def calculate_momentum(stock_data):
         current_price = stock['current_price']
         current_volume = stock['volume']
         
-        # Simulate 9:30 AM values
         price_at_930 = current_price * 0.99
         volume_at_930 = current_volume * 0.3
         
-        # Calculate changes
         price_change = current_price - price_at_930
         price_change_pct = (price_change / price_at_930) * 100
         
         volume_change = current_volume - volume_at_930
         volume_change_pct = (volume_change / volume_at_930) * 100 if volume_at_930 > 0 else 0
         
-        # Only include positive trends
         if price_change > 0 and volume_change > 0:
             momentum_score = price_change_pct * volume_change_pct
             
@@ -116,7 +110,6 @@ def calculate_momentum(stock_data):
                 'momentum_score': round(momentum_score, 2)
             })
     
-    # Sort by momentum score
     results.sort(key=lambda x: x['momentum_score'], reverse=True)
     return results
 
@@ -273,4 +266,5 @@ if __name__ == '__main__':
     print("   - GET  /api/health              Health check")
     print("=" * 60)
     
+
     app.run(debug=True, host='0.0.0.0', port=5000)
