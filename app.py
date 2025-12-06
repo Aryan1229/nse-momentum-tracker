@@ -1,15 +1,10 @@
-"""
-NSE Momentum Tracker - Flask Backend API
-Provides REST API endpoints for the web dashboard
-"""
-
 from flask import Flask, jsonify, render_template, send_file
 from flask_cors import CORS
-import requests
+import yfinance as yf
+import pandas as pd
 import json
-import time
 from datetime import datetime
-import random
+import os
 
 app = Flask(__name__)
 CORS(app)
@@ -18,96 +13,104 @@ stock_data_cache = []
 momentum_results_cache = []
 
 NIFTY50_SYMBOLS = [
-    'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
-    'HINDUNILVR', 'ITC', 'SBIN', 'BHARTIARTL', 'BAJFINANCE',
-    'KOTAKBANK', 'LT', 'AXISBANK', 'ASIANPAINT', 'MARUTI',
-    'SUNPHARMA', 'TITAN', 'ULTRACEMCO', 'NESTLEIND', 'WIPRO'
+    'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
+    'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'BAJFINANCE.NS',
+    'KOTAKBANK.NS', 'LT.NS', 'AXISBANK.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
+    'SUNPHARMA.NS', 'TITAN.NS', 'ULTRACEMCO.NS', 'NESTLEIND.NS', 'WIPRO.NS'
 ]
 
 
-def fetch_nse_stock_data():
-    """Fetch live data from NSE or generate simulated data"""
+def fetch_intraday_data_yfinance():
+    """
+    Fetch ACTUAL intraday data using yFinance
+    Gets real 9:30 AM and current prices - NO ASSUMPTIONS
+    """
     try:
-        stock_data = []
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'application/json',
-        }
+        all_stock_data = []
+        today = datetime.now().date()
         
-        for symbol in NIFTY50_SYMBOLS[:10]:  
+        for symbol in NIFTY50_SYMBOLS[:10]: 
             try:
-                url = f"https://www.nseindia.com/api/quote-equity?symbol={symbol}"
-                session = requests.Session()
-                session.get("https://www.nseindia.com", headers=headers, timeout=3)
-                time.sleep(0.2)
+                display_symbol = symbol.replace('.NS', '')
                 
-                response = session.get(url, headers=headers, timeout=5)
+                ticker = yf.Ticker(symbol)
+                df = ticker.history(
+                    period='1d',
+                    interval='1m',
+                    start=today,
+                    prepost=False
+                )
                 
-                if response.status_code == 200:
-                    data = response.json()
-                    price_info = data.get('priceInfo', {})
-                    current_price = price_info.get('lastPrice', 0)
-                    volume = data.get('totalTradedVolume', 0)
-                    
-                    stock_data.append({
-                        'symbol': symbol,
-                        'current_price': float(current_price),
-                        'volume': int(volume),
-                        'timestamp': datetime.now().isoformat()
-                    })
-            except:
+                if df.empty:
+                    continue
+                
+                market_open_time = pd.Timestamp(f"{today} 09:30:00", tz=df.index.tz)
+                time_930 = df.index[df.index >= market_open_time].min()
+                
+                if pd.isna(time_930):
+                    continue
+                
+                data_930 = df.loc[time_930]
+                price_930 = float(data_930['Close'])
+                volume_930 = int(data_930['Volume'])
+                
+                current_time = df.index.max()
+                data_current = df.loc[current_time]
+                current_price = float(data_current['Close'])
+                current_volume = int(df['Volume'].sum())
+                
+                all_stock_data.append({
+                    'symbol': display_symbol,
+                    'price_930': price_930,
+                    'volume_930': volume_930,
+                    'current_price': current_price,
+                    'current_volume': current_volume,
+                    'current_time': current_time.strftime('%H:%M:%S'),
+                    'timestamp': datetime.now().isoformat()
+                })
+                
+            except Exception as e:
+                print(f"Error fetching {symbol}: {e}")
                 continue
         
-        if len(stock_data) < 5:
-            return generate_simulated_data()
-        
-        return stock_data
+        return all_stock_data
     
     except Exception as e:
-        print(f"Error fetching data: {e}")
-        return generate_simulated_data()
-
-
-def generate_simulated_data():
-    """Generate realistic simulated market data"""
-    data = []
-    for symbol in NIFTY50_SYMBOLS:
-        base_price = random.uniform(500, 3500)
-        data.append({
-            'symbol': symbol,
-            'current_price': round(base_price, 2),
-            'volume': random.randint(500000, 15000000),
-            'timestamp': datetime.now().isoformat()
-        })
-    return data
+        print(f"Error in fetch_intraday_data_yfinance: {e}")
+        return []
 
 
 def calculate_momentum(stock_data):
-    """Calculate momentum scores for stocks"""
+    """
+    Calculate momentum using ACTUAL prices - NO ASSUMPTIONS
+    """
     results = []
     
     for stock in stock_data:
+        price_930 = stock['price_930']
         current_price = stock['current_price']
-        current_volume = stock['volume']
+        volume_930 = stock['volume_930']
+        current_volume = stock['current_volume']
         
-        price_at_930 = current_price * 0.99
-        volume_at_930 = current_volume * 0.3
+        price_change = current_price - price_930
+        price_change_pct = (price_change / price_930) * 100
         
-        price_change = current_price - price_at_930
-        price_change_pct = (price_change / price_at_930) * 100
-        
-        volume_change = current_volume - volume_at_930
-        volume_change_pct = (volume_change / volume_at_930) * 100 if volume_at_930 > 0 else 0
+        volume_change = current_volume - volume_930
+        volume_change_pct = (volume_change / volume_930) * 100 if volume_930 > 0 else 0
         
         if price_change > 0 and volume_change > 0:
             momentum_score = price_change_pct * volume_change_pct
             
             results.append({
                 'symbol': stock['symbol'],
+                'price_930': price_930,
                 'current_price': current_price,
                 'price_change_pct': round(price_change_pct, 2),
+                'volume_930': volume_930,
+                'current_volume': current_volume,
                 'volume_change_pct': round(volume_change_pct, 2),
-                'momentum_score': round(momentum_score, 2)
+                'momentum_score': round(momentum_score, 2),
+                'current_time': stock['current_time']
             })
     
     results.sort(key=lambda x: x['momentum_score'], reverse=True)
@@ -122,18 +125,29 @@ def index():
 
 @app.route('/api/fetch-data', methods=['GET'])
 def fetch_data():
-    """API endpoint to fetch live stock data"""
+    """
+    API endpoint to fetch live stock data using yFinance
+    Uses ACTUAL intraday prices - no assumptions
+    """
     global stock_data_cache
     
     try:
-        stock_data_cache = fetch_nse_stock_data()
+        stock_data_cache = fetch_intraday_data_yfinance()
+        
+        if not stock_data_cache:
+            return jsonify({
+                'success': False,
+                'message': 'No data available. Market might be closed or data fetch failed.',
+                'count': 0
+            }), 400
         
         return jsonify({
             'success': True,
             'data': stock_data_cache,
             'count': len(stock_data_cache),
             'timestamp': datetime.now().isoformat(),
-            'message': 'Data fetched successfully'
+            'message': f'Fetched ACTUAL intraday data for {len(stock_data_cache)} stocks',
+            'source': 'yFinance (Real 9:30 AM prices)'
         })
     
     except Exception as e:
@@ -146,7 +160,10 @@ def fetch_data():
 
 @app.route('/api/analyze', methods=['GET'])
 def analyze():
-    """API endpoint to analyze momentum"""
+    """
+    API endpoint to analyze momentum
+    Uses ACTUAL prices - NO ASSUMPTIONS
+    """
     global momentum_results_cache
     
     if not stock_data_cache:
@@ -163,7 +180,8 @@ def analyze():
             'results': momentum_results_cache,
             'count': len(momentum_results_cache),
             'timestamp': datetime.now().isoformat(),
-            'message': f'Found {len(momentum_results_cache)} trending stocks'
+            'message': f'Found {len(momentum_results_cache)} trending stocks',
+            'note': 'Using ACTUAL 9:30 AM prices - NO assumptions made'
         })
     
     except Exception as e:
@@ -185,7 +203,9 @@ def get_stats():
         'total_stocks': len(stock_data_cache),
         'trending_stocks': len(momentum_results_cache),
         'top_score': top_score,
-        'last_update': datetime.now().isoformat()
+        'last_update': datetime.now().isoformat(),
+        'data_source': 'yFinance API',
+        'method': 'ACTUAL intraday prices (no assumptions)'
     })
 
 
@@ -247,24 +267,28 @@ def health_check():
     return jsonify({
         'status': 'healthy',
         'timestamp': datetime.now().isoformat(),
-        'version': '1.0.0'
+        'version': '2.0.0',
+        'data_source': 'yFinance API',
+        'method': 'ACTUAL intraday prices'
     })
 
 
 if __name__ == '__main__':
-    print("=" * 60)
+    print("=" * 80)
     print("🚀 NSE Momentum Tracker - Server Starting...")
-    print("=" * 60)
+    print("=" * 80)
     print("📊 Dashboard URL: http://localhost:5000")
+    print("🔌 Data Source: yFinance API")
+    print("✅ Method: ACTUAL 9:30 AM prices (NO assumptions)")
+    print("=" * 80)
     print("🔌 API Endpoints:")
-    print("   - GET  /api/fetch-data          Fetch live stock data")
-    print("   - GET  /api/analyze             Analyze momentum")
+    print("   - GET  /api/fetch-data          Fetch ACTUAL intraday data")
+    print("   - GET  /api/analyze             Analyze momentum (no assumptions)")
     print("   - GET  /api/stats               Get statistics")
     print("   - GET  /api/export              Export results")
     print("   - GET  /api/top-performers/N    Get top N stocks")
     print("   - GET  /api/stock/<symbol>      Get stock details")
     print("   - GET  /api/health              Health check")
-    print("=" * 60)
+    print("=" * 80)
     
-
     app.run(debug=True, host='0.0.0.0', port=5000)
