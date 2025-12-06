@@ -1,90 +1,110 @@
-import requests
+import yfinance as yf
+import pandas as pd
+from datetime import datetime, timedelta
 import json
-import time
-from datetime import datetime
 
-def fetch_nse_data():
+NIFTY50_SYMBOLS = [
+    'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
+    'HINDUNILVR.NS', 'ITC.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'BAJFINANCE.NS',
+    'KOTAKBANK.NS', 'LT.NS', 'AXISBANK.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
+    'SUNPHARMA.NS', 'TITAN.NS', 'ULTRACEMCO.NS', 'NESTLEIND.NS', 'WIPRO.NS'
+]
+
+
+def fetch_intraday_data():
     """
-    Fetches live intraday data for NIFTY 50 stocks from NSE
+    Fetch intraday data using yFinance
+    Gets actual 9:30 AM and 10:30 AM prices and volumes
     """
-        
-    nifty50_symbols = [
-        'RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
-        'HINDUNILVR', 'ITC', 'SBIN', 'BHARTIARTL', 'BAJFINANCE',
-        'KOTAKBANK', 'LT', 'AXISBANK', 'ASIANPAINT', 'MARUTI',
-        'SUNPHARMA', 'TITAN', 'ULTRACEMCO', 'NESTLEIND', 'WIPRO'
-    ]
     
     print("=" * 80)
-    print("NSE INTRADAY DATA SCRAPER")
+    print(" " * 25 + "NSE INTRADAY DATA SCRAPER")
+    print(" " * 28 + "Using yFinance API")
     print("=" * 80)
-    print(f"Scraping Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Number of Stocks: {len(nifty50_symbols)}")
-    print("=" * 80)
+    print(f"Fetching Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"Number of Stocks: {len(NIFTY50_SYMBOLS)}")
+    print("=" * 80 + "\n")
     
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': 'application/json',
-        'Accept-Language': 'en-US,en;q=0.9',
-    }
+    all_stock_data = []
     
-    stock_data = []
-    
-    for symbol in nifty50_symbols:
+    for symbol in NIFTY50_SYMBOLS:
         try:
-            url = f"https://www.nseindia.com/api/quote-equity?symbol={symbol}"
+            display_symbol = symbol.replace('.NS', '')
             
-            session = requests.Session()
-            session.get("https://www.nseindia.com", headers=headers)
-            time.sleep(0.5)  
+            ticker = yf.Ticker(symbol)
             
-            response = session.get(url, headers=headers, timeout=10)
+            today = datetime.now().date()
             
-            if response.status_code == 200:
-                data = response.json()
-                
-                price_info = data.get('priceInfo', {})
-                current_price = price_info.get('lastPrice', 0)
-                
-                total_traded_volume = data.get('preOpenMarket', {}).get('totalTradedVolume', 0)
-                if total_traded_volume == 0:
-                    total_traded_volume = data.get('totalTradedVolume', 0)
-                
-                stock_data.append({
-                    'symbol': symbol,
-                    'current_price': current_price,
-                    'volume': total_traded_volume,
-                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                })
-                
-                print(f"✓ {symbol:15} | Price: ₹{current_price:10.2f} | Volume: {total_traded_volume:15,}")
+            df = ticker.history(
+                period='1d',
+                interval='1m',
+                start=today,
+                prepost=False
+            )
             
-            else:
-                print(f"✗ {symbol:15} | Failed to fetch data (Status: {response.status_code})")
+            if df.empty:
+                print(f"✗ {display_symbol:15} | No data available")
+                continue
+            
+            market_open_time = pd.Timestamp(f"{today} 09:30:00", tz=df.index.tz)
+            
+            time_930 = df.index[df.index >= market_open_time].min()
+            
+            if pd.isna(time_930):
+                print(f"✗ {display_symbol:15} | Market not open yet")
+                continue
+            
+            data_930 = df.loc[time_930]
+            price_930 = data_930['Close']
+            volume_930 = data_930['Volume']
+            
+            current_time = df.index.max()
+            data_current = df.loc[current_time]
+            current_price = data_current['Close']
+            current_volume = df['Volume'].sum()  
+            
+            stock_data = {
+                'symbol': display_symbol,
+                'price_930': float(price_930),
+                'volume_930': int(volume_930),
+                'current_price': float(current_price),
+                'current_volume': int(current_volume),
+                'current_time': current_time.strftime('%H:%M:%S'),
+                'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            }
+            
+            all_stock_data.append(stock_data)
+            
+            print(f"✓ {display_symbol:15} | 9:30 Price: ₹{price_930:10.2f} | "
+                  f"Current: ₹{current_price:10.2f} | Volume: {current_volume:,}")
         
         except Exception as e:
-            print(f"✗ {symbol:15} | Error: {str(e)[:50]}")
-        
-        time.sleep(0.5)  
+            print(f"✗ {display_symbol:15} | Error: {str(e)[:50]}")
+            continue
     
     output_file = 'nse_intraday_data.json'
     with open(output_file, 'w') as f:
-        json.dump(stock_data, f, indent=2)
+        json.dump(all_stock_data, f, indent=2)
     
-    print("=" * 80)
+    print("\n" + "=" * 80)
     print(f"✓ Data saved to '{output_file}'")
-    print(f"✓ Successfully scraped {len(stock_data)} stocks")
+    print(f"✓ Successfully fetched {len(all_stock_data)} stocks")
     print("=" * 80)
     
-    return stock_data
+    return all_stock_data
 
 
 if __name__ == "__main__":
     try:
-        data = fetch_nse_data()
-        print(f"\n✓ Scraping completed successfully!")
-        print(f"✓ Run 'python script2_analysis.py' to analyze the data")
+        print("\n🚀 Starting intraday data fetch using yFinance...\n")
+        data = fetch_intraday_data()
+        
+        if data:
+            print(f"\n✓ Scraping completed successfully!")
+            print(f"✓ {len(data)} stocks processed")
+            print(f"✓ Run 'python script2_analysis.py' to analyze momentum")
+        else:
+            print("\n⚠ No data could be fetched. Market might be closed.")
+            
     except Exception as e:
         print(f"\n✗ Error occurred: {str(e)}")
-
-        print("\nNote: If NSE API fails, the script will use simulated data in Script 2")
