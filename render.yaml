@@ -2,8 +2,21 @@ services:
   - type: web
     name: nse-momentum-tracker
     env: python
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    region: oregon
+    plan: free
+    buildCommand: pip install --upgrade pip setuptools && pip install -r requirements.txt
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
     envVars:
       - key: PYTHON_VERSION
-        value: 3.9.0
+        value: 3.11.0
+```
+
+**Key change:** Added `setuptools` to buildCommand
+
+---
+
+## 🎯 **DO THESE 3 THINGS IN ORDER:**
+
+### ✅ **Action 1: Create runtime.txt**
+```
+python-3.11.0
