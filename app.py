@@ -1,7 +1,7 @@
 from flask import Flask, jsonify, render_template, send_file
 from flask_cors import CORS
-import yfinance as yf
-import pandas as pd
+#import yfinance as yf
+#import pandas as pd
 import json
 from datetime import datetime
 import os
@@ -21,59 +21,27 @@ NIFTY50_SYMBOLS = [
 
 
 def fetch_intraday_data_yfinance():
-    """
-    Fetch ACTUAL intraday data using yFinance
-    Gets real 9:30 AM and current prices - NO ASSUMPTIONS
-    """
-    try:
-        all_stock_data = []
-        today = datetime.now().date()
-        
-        for symbol in NIFTY50_SYMBOLS[:10]: 
-            try:
-                display_symbol = symbol.replace('.NS', '')
-                
-                ticker = yf.Ticker(symbol)
-                df = ticker.history(
-                    period='1d',
-                    interval='1m',
-                    start=today,
-                    prepost=False
-                )
-                
-                if df.empty:
-                    continue
-                
-                market_open_time = pd.Timestamp(f"{today} 09:30:00", tz=df.index.tz)
-                time_930 = df.index[df.index >= market_open_time].min()
-                
-                if pd.isna(time_930):
-                    continue
-                
-                data_930 = df.loc[time_930]
-                price_930 = float(data_930['Close'])
-                volume_930 = int(data_930['Volume'])
-                
-                current_time = df.index.max()
-                data_current = df.loc[current_time]
-                current_price = float(data_current['Close'])
-                current_volume = int(df['Volume'].sum())
-                
-                all_stock_data.append({
-                    'symbol': display_symbol,
-                    'price_930': price_930,
-                    'volume_930': volume_930,
-                    'current_price': current_price,
-                    'current_volume': current_volume,
-                    'current_time': current_time.strftime('%H:%M:%S'),
-                    'timestamp': datetime.now().isoformat()
-                })
-                
-            except Exception as e:
-                print(f"Error fetching {symbol}: {e}")
-                continue
-        
-        return all_stock_data
+    """Demo data for deployment - yFinance scripts available in separate repo"""
+    import random
+    from datetime import datetime
+    
+    symbols = ['RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK',
+               'HINDUNILVR', 'ITC', 'SBIN', 'BHARTIARTL', 'BAJFINANCE']
+    
+    all_stock_data = []
+    for symbol in symbols:
+        base_price = round(random.uniform(1000, 3000), 2)
+        all_stock_data.append({
+            'symbol': symbol,
+            'price_930': round(base_price * 0.99, 2),
+            'volume_930': random.randint(50000, 200000),
+            'current_price': base_price,
+            'current_volume': random.randint(1000000, 5000000),
+            'current_time': '10:30:00',
+            'timestamp': datetime.now().isoformat()
+        })
+    
+    return all_stock_data
     
     except Exception as e:
         print(f"Error in fetch_intraday_data_yfinance: {e}")
@@ -292,3 +260,4 @@ if __name__ == '__main__':
     print("=" * 80)
     
     app.run(debug=True, host='0.0.0.0', port=5000)
+
